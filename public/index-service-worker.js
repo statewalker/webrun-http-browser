@@ -1,0 +1,1 @@
+importScripts("../dist/index-sw-umd.js")

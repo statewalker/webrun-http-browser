@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+  <title>Page Title</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+</head>
+
+<body>
+  <div id="counter"></div>
+
+  <button id="button">Load Data</button>
+  <div id="panel"></div>
+
+  <script type="module">
+    import { httpAdapter } from "./index.js";
+    import { v4 as uuidv4 } from "https://unpkg.com/uuid@9.0.0/dist/esm-browser/index.js";
+
+    Promise.resolve().then(main).catch(console.error);
+
+    async function main() {
+
+      const prefix = `/${uuidv4()}/`; // "/sw-http/"
+      const registration = await httpAdapter.register(prefix, async (request) => {
+        const elm = document.querySelector("#counter");
+        elm.innerText = "Last Request Time: " + Date.now();
+
+        const { pathname } = new URL(request.url);
+        if (request.method === 'GET' && pathname.match(/\.js$/)) {
+          const code = `export default function sayHello() { return 'Hello, there ${Date.now()}!'; }`
+          return new Response(code, {
+            headers: {
+              "Content-Type": "text/javascript",
+              "X-Foo-Bar": "baz"
+            }
+          })
+        } else if (request.method === 'POST') {
+          const body = await request.text();
+          console.log('[client] Body:', body);
+          const obj = {
+            url: request.url + '',
+            method: request.method,
+            message: body.toUpperCase(),
+            headers: Object.fromEntries([...request.headers])
+          }
+          return new Response(JSON.stringify(obj, null, 2), {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Foo-Bar": "baz"
+            }
+          })
+        }
+
+        return new Response("Hello, world " + Date.now(), {
+          headers: {
+            "Content-Type": "text/plain",
+            "X-Foo-Bar": "baz"
+          }
+        })
+
+      })
+
+      const { baseUrl } = registration;
+
+      const btn = document.querySelector("#button");
+      const panel = document.querySelector("#panel");
+      
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const fetchUrl = new URL("./test.abc", baseUrl) + '';
+        console.log('Fetch URL:', fetchUrl);
+        const res = await fetch(fetchUrl, {
+          // method: 'POST',
+          // body: "Hello, there!",
+          // headers: {
+          //   "Content-Type": "text/plain"
+          // }
+        });
+        const content = await res.text();
+        panel.innerText = content;
+      })
+      await new Promise(r => setTimeout(r, 2000));
+
+      // (async function () {
+      //   try {
+      //     const scriptUrl = new URL("./xyz/sayHello.js", baseUrl) + '';
+      //     console.log('>TF', scriptUrl);
+      //     await new Promise(r => setTimeout(r, 2000));
+      //     const { default: sayHello } = await import(scriptUrl);
+      //     console.log(sayHello);
+      //     console.log(sayHello())
+      //   } catch (error) {
+      //     console.error(error);
+      //   }
+      // })();
+
+
+    }
+
+  </script>
+
+</body>
+
+</html>

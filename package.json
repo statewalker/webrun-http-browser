@@ -1,0 +1,53 @@
+{
+  "name": "@statewalker/webrun-http-browser",
+  "version": "0.0.1",
+  "description": "Service-worker-based HTTP server simulation for browsers",
+  "keywords": [],
+  "homepage": "https://github.com/statewalker/statewalker-webrun-http-browser",
+  "author": {
+    "name": "Mikhail Kotelnikov",
+    "email": "mikhail.kotelnikov@gmail.com"
+  },
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist/**/package.json",
+    "dist/**/*.js",
+    "src/**/*.js",
+    "index.js"
+  ],
+  "module": "src/index.js",
+  "main": "src/index.js",
+  "jsdelivr": "dist/index.js",
+  "unpkg": "dist/index.js",
+  "exports": {
+    "umd": "./dist/index-umd.min.js",
+    "default": "./src/index.js"
+  },
+  "dependencies": {
+    "register-service-worker": "^1.7.2",
+    "@statewalker/utils" : "^0.4.2"
+  },
+  "devDependencies": {
+    "@statewalker/rollup": "^0.1.6",
+    "eslint": "^8",
+    "expect.js": "^0.3",
+    "mocha": "^10",
+    "msw": "^0.49.2",
+    "rollup": "^3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:statewalker/statewalker-webrun-http-browser.git"
+  },
+  "scripts": {
+    "eslint": "eslint src",
+    "rollup": "rollup -c",
+    "test": "mocha -R spec ./test/index.js && yarn eslint",
+    "prepublishOnly": "rm -rf dist && yarn test && yarn rollup"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  }
+}
