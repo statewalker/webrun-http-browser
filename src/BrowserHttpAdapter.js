@@ -1,7 +1,7 @@
-import { callChannel } from "./data-calls.js";
+import { callChannel, handleChannelCalls } from "./data-calls.js";
 import { handleHttpRequests } from "./http-send-recieve.js";
-
-// import { register } from 'register-service-worker'
+// import { register } from "register-service-worker";
+import { newRegistry } from "@statewalker/utils";
 
 class HttpAdapter {
   constructor(options) {
@@ -21,7 +21,6 @@ class HttpAdapter {
    * Starts the server.
    */
   async start() {
-  
   }
 
   /**
@@ -32,13 +31,19 @@ class HttpAdapter {
 }
 
 export class BrowserHttpAdapter extends HttpAdapter {
+  constructor(options) {
+    super(options);
+    this._handlers = new Map();
+  }
+
   get scope() {
     return this.options.scope || new URL("./", this.serviceWorkerUrl).pathname;
   }
 
   get rootUrl() {
     if (!this._rootUrl) {
-      this._rootUrl = this.options.rootUrl || new URL("./", this.serviceWorkerUrl) + ''
+      this._rootUrl = this.options.rootUrl ||
+        new URL("./", this.serviceWorkerUrl) + "";
     }
     return this._rootUrl;
   }
@@ -53,48 +58,22 @@ export class BrowserHttpAdapter extends HttpAdapter {
     return this._serviceWorkerUrl;
   }
 
-  async _checkStarted() {
-    return this._registrationPromise = this._registrationPromise ||
-      new Promise(async (resolve, reject) => {
-        try {
-          if (!navigator.serviceWorker) {
-            throw new Error("navigator.serviceWorker is not available");
-          }
-          const registration = await navigator.serviceWorker.register(
-            this.serviceWorkerUrl,
-            {
-              // type: "module",  
-              scope: this.scope,
-            },
-          );
-          let serviceWorker;
-          for (const state of ["installing", "waiting", "active"]) {
-            if (registration[state]) {
-              serviceWorker = registration[state];
-              break;
-            }
-          }
-          this._serviceWorker = serviceWorker;
-          const isActivated = () => serviceWorker.state === "activated";
-          if (!isActivated()) {
-            serviceWorker.addEventListener("statechange", function handler(e) {
-              if (!isActivated()) return;
-              serviceWorker.removeEventListener("statechange", handler);
-              resolve({
-                registration,
-                serviceWorker,
-              });
-            });
-          } else {
-            resolve({
-              registration,
-              serviceWorker,
-            });
-          }
-        } catch (error) {
-          reject(error);
-        }
-      });
+  async _handleHttpRequests(request) {
+    const requestUrl = request.url;
+    let handler;
+    for (let entry of this._handlers.entries()) {
+      const [urlPrefix] = entry;
+      if (requestUrl.indexOf(urlPrefix) === 0) {
+        handler = entry[1];
+        break;
+      }
+    }
+    return !handler
+      ? new Response(null, {
+        status: 404,
+        statusMessage: "Error 404: Not found",
+      })
+      : handler(request);
   }
 
   /**
@@ -104,63 +83,120 @@ export class BrowserHttpAdapter extends HttpAdapter {
    * @return {string} full URL of the resulting endpoint
    */
   async register(prefix, handler) {
-    const { serviceWorker } = await this._checkStarted();
-
-
-    const messageChannel = new MessageChannel();
     prefix = "./" + (prefix || "").replace(/^[\.\/]+/, "");
     const baseUrl = new URL(prefix, this.rootUrl) + "";
-    const result = await callChannel(serviceWorker, "CHANNEL_OPEN", {
+    this._handlers.set(baseUrl, handler);
+    await this._notifyChanges();
+    return {
       baseUrl,
       prefix,
-    }, messageChannel.port2);
-    await handleHttpRequests(messageChannel.port1, handler);
-    return {
-      ...result,
       async remove() {
+        this._handlers.delete(baseUrl);
+        await this._notifyChanges();
       },
     };
+  }
+
+  async _notifyChanges() {
+    await this.start();
+    await this._updateCommunicationChannel();
+  }
+
+  async _updateCommunicationChannel() {
+    console.log('[_updateCommunicationChannel]', this._serviceWorker)
+    if (!this._serviceWorker) return ;
+    const messageChannel = new MessageChannel();
+    this._setCommunicationPort(messageChannel.port1);
+    const params = this._getRegistrationInfo();
+    await callChannel(
+      this._serviceWorker,
+      "UPDATE_COMMUNICATION_PORT",
+      params,
+      messageChannel.port2,
+    );
+  }
+
+  _setCommunicationPort(port) {
+    if (this._cleanupRequestChannel) {
+      this._cleanupRequestChannel();
+    }
+    this._cleanupRequestChannel = handleHttpRequests(
+      port,
+      this._handleHttpRequests.bind(this),
+    );
+  }
+
+  _getRegistrationInfo() {
+    const urls = [...this._handlers.keys()];
+    return { urls };
   }
 
   /**
    * Starts the server.
    */
   async start() {
-    /* 
-    register(this.serviceWorkerUrl, {
-      registrationOptions: {
-        type: "module",
-        scope: this.scope,
-      },
-      ready (registration) {
-        console.log('Service worker is active.')
-      },
-      registered (registration) {
-        console.log('Service worker has been registered.')
-      },
-      cached (registration) {
-        console.log('Content has been cached for offline use.')
-      },
-      updatefound (registration) {
-        console.log('New content is downloading.')
-      },
-      updated (registration) {
-        console.log('New content is available; please refresh.')
-      },
-      offline () {
-        console.log('No internet connection found. App is running in offline mode.')
-      },
-      error (error) {
-        console.error('Error during service worker registration:', error)
-      }
-    })
-    */
+    return this._registrationPromise = this._registrationPromise ||
+      (async () => {
+        const [register, cleanup] = newRegistry();
+        this._cleanupRegistrations = cleanup;
+        register(() => this._cleanupRegistrations = null);
+        const registration = await navigator.serviceWorker.register(
+          this.serviceWorkerUrl,
+          {
+            // type: "module",
+            scope: this.scope,
+          },
+        );
+        register(() => registration.unregister());
+
+        // (example: when the service worker is the same but it is waked up/activated after an idle period)
+        register(
+          handleChannelCalls(
+            navigator.serviceWorker,
+            "UPDATE_COMMUNICATION_PORT",
+            async (event, params, port) => {
+              console.log('[UPDATE_COMMUNICATION_PORT]', port)
+              this._setCommunicationPort(port);
+              return this._getRegistrationInfo();
+            },
+          ),
+        );
+
+        // Track when the controller changes
+        const onChangeControler = async () => {
+          this._serviceWorker = navigator.serviceWorker.controller;
+          if (this._serviceWorker) {
+            await awaitServiceWorkerActivation(this._serviceWorker);
+            await this._updateCommunicationChannel();
+          }
+        };
+        await onChangeControler();
+        navigator.serviceWorker.oncontrollerchange = onChangeControler;
+        register(() => navigator.serviceWorker.oncontrollerchange = null);
+
+        // ------------------------------
+        // Await until the service is ready
+        async function awaitServiceWorkerActivation(worker) {
+          const isActivated = () => worker.state === "activated";
+          await new Promise(async (resolve) => {
+            if (isActivated()) resolve();
+            else {
+              worker.onstatechange = () => {
+                if (!isActivated()) return;
+                worker.onstatechange = null;
+                resolve();
+              };
+            }
+          });
+        }
+      })();
   }
 
   /**
    * Stops the server and removes associated handlers.
    */
   async stop() {
+    if (this._cleanupRegistrations) this._cleanupRegistrations();
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (let registration of registrations) {
       try {

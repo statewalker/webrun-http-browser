@@ -13,4 +13,6 @@ let workersConfigs = configs.map(config => {
     ]
   }
 });
-export default [...configs, ...workersConfigs];
+const fullConfig = [...configs, ...workersConfigs]
+  .map(conf => (conf.external = [], conf));
+export default fullConfig;

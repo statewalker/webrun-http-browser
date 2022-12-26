@@ -2,7 +2,7 @@ import { handleStreams, sendStream } from "./data-channels.js";
 import { toReadableStream, fromReadableStream } from "./readable-streams.js";
 
 export function handleHttpRequests(communicationPort, handler) {
-  handleStreams(communicationPort, async function* (it) {
+  return handleStreams(communicationPort, async function* (it) {
     try {
       const { done, value } = await it.next();
       let responseOptions = {};
@@ -12,7 +12,6 @@ export function handleHttpRequests(communicationPort, handler) {
       } else {
         let requestBody = undefined;
         const { url, mode, ...requestOptions } = value;
-        console.log("[handleHttpRequests]", requestOptions.method, url);
         delete value.mode;
         if (
           requestOptions.method !== "GET" &&
@@ -30,6 +29,8 @@ export function handleHttpRequests(communicationPort, handler) {
           body: requestBody,
         });
         const response = await handler(request);
+        console.log("[handleHttpRequests]", requestOptions.method, url, response);
+
         responseOptions = {
           status: response.status,
           statusTet: response.statusText,

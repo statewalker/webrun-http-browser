@@ -99,24 +99,31 @@ export function newChannel(port) {
 export function newInvokationChannel(port, handler = () => {
   throw new Error("Handler not implemented");
 }) {
+  const MESSAGE_TYPE_REQUEST = "REQUEST";
+  const MESSAGE_TYPE_RESPONSE = "RESPONSE";
+  const EVENT_MESSAGE = "message";
+  
   const requests = {};
   let requestCounter = 0;
   const listener = async (event) => {
     const data = event.data || {};
     const { type } = data;
-    if (type === "REQUEST") {
+    if (type === MESSAGE_TYPE_REQUEST) {
       try {
         const { callId, request } = data;
-        const response = await handler(request);
-        port.postMessage({ type: "RESPONSE", callId, response });
+        let result = await handler(request, ...(event.ports || []));
+        const [response, ...transfers] = Array.isArray(result)
+          ? result
+          : result !== undefined ? [result] : [];
+        port.postMessage({ type: MESSAGE_TYPE_RESPONSE, callId, response }, transfers);
       } catch (error) {
         port.postMessage({
-          type: "RESPONSE",
+          type: MESSAGE_TYPE_RESPONSE,
           callId,
           error: serializeError(error),
         });
       }
-    } else if (type === "RESPONSE") {
+    } else if (type === MESSAGE_TYPE_RESPONSE) {
       const { callId, response, error } = data;
       const request = requests[callId];
       delete requests[callId];
@@ -129,21 +136,21 @@ export function newInvokationChannel(port, handler = () => {
   };
 
   const start = async () => {
-    port.addEventListener("message", listener);
+    port.addEventListener(EVENT_MESSAGE, listener);
     await port.start();
   };
 
   const close = async () => {
-    port.removeEventListener("message", listener);
+    port.removeEventListener(EVENT_MESSAGE, listener);
     await port.close();
   };
 
-  const invoke = async function (request = {}) {
+  const invoke = async function (request = {}, ...transfers) {
     const callId = ++requestCounter;
     return new Promise((resolve, reject) => {
       try {
         requests[callId] = { resolve, reject };
-        port.postMessage({ type: "REQUEST", callId, request });
+        port.postMessage({ type: MESSAGE_TYPE_REQUEST, callId, request }, transfers);
       } catch (error) {
         reject(error);
         delete request[callId];

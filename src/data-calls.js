@@ -26,5 +26,6 @@ export function handleChannelCalls(mainChannel, callType, handler) {
     port.postMessage(response);
   };
   mainChannel.addEventListener("message", messageListener);
+  try { mainChannel.start && mainChannel.start(); } catch (e) {}
   return () => mainChannel.removeEventListener("message", messageListener);
 }

@@ -70,7 +70,7 @@
       btn.addEventListener("click", async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        const fetchUrl = new URL("./test.abc", baseUrl) + '';
+        const fetchUrl = new URL("./data-calls.js", baseUrl) + '';
         console.log('Fetch URL:', fetchUrl);
         const res = await fetch(fetchUrl, {
           // method: 'POST',
