@@ -107,10 +107,10 @@ export function newInvokationChannel(port, handler = () => {
   let requestCounter = 0;
   const listener = async (event) => {
     const data = event.data || {};
-    const { type } = data;
+    const { type, callId } = data;
     if (type === MESSAGE_TYPE_REQUEST) {
       try {
-        const { callId, request } = data;
+        const { request } = data;
         let result = await handler(request, ...(event.ports || []));
         const [response, ...transfers] = Array.isArray(result)
           ? result

@@ -1,6 +1,5 @@
 import { callChannel, handleChannelCalls } from "./data-calls.js";
 import { handleHttpRequests } from "./http-send-recieve.js";
-// import { register } from "register-service-worker";
 import { newRegistry } from "@statewalker/utils";
 
 class HttpAdapter {
