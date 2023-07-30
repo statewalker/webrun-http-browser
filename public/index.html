@@ -9,25 +9,49 @@
 </head>
 
 <body>
+  <div id="info"></div>
+  <div id="messages" style="display: block; border: 1px solid blue; padding: 0.5em;"></div>
   <div id="counter"></div>
 
   <button id="button">Load Data</button>
   <div id="panel"></div>
 
   <script type="module">
-    import { httpAdapter } from "./index.js";
+    import newHttpAdapter from "./index.js";
     import { v4 as uuidv4 } from "https://unpkg.com/uuid@9.0.0/dist/esm-browser/index.js";
 
-    Promise.resolve().then(main).catch(console.error);
+    document.addEventListener("DOMContentLoaded", main);
+    // Promise.resolve().then(main).catch(console.error);
 
     async function main() {
 
-      const prefix = `/${uuidv4()}/`; // "/sw-http/"
-      const registration = await httpAdapter.register(prefix, async (request) => {
-        const elm = document.querySelector("#counter");
-        elm.innerText = "Last Request Time: " + Date.now();
+      const key = uuidv4();
+      const prefix = `/${key}/`; // "/sw-http/"
+      const httpAdapter= newHttpAdapter({ key });
+      await httpAdapter.start();
 
-        const { pathname } = new URL(request.url);
+      function showMessage(message) {
+        const elm = document.body.querySelector("#messages");
+        elm.innerHTML = message;
+      }
+      showMessage("No messages yet... :(")
+
+      window.addEventListener("message", receiveMessage, false);
+      function receiveMessage(event) {
+        // const [port] = event.ports || [];
+        if (event.ports) {
+          event.ports[0]?.postMessage("Message back from the IFrame");
+          console.log('EVENT WITH PORTS:', event, event.ports);
+        }
+        showMessage(`Message from "${event.origin}". Data:"${JSON.stringify(event.data)}" !`)
+      }
+
+      const registration = await httpAdapter.register(prefix, async (request) => {
+        const requestUrl = new URL(request.url);
+        const elm = document.querySelector("#counter");
+        elm.innerHTML = `URL: ${requestUrl}<br />Last Request Time: ${Date.now()}`;
+
+        const { pathname } = requestUrl;
         if (request.method === 'GET' && pathname.match(/\.js$/)) {
           const code = `export default function sayHello() { return 'Hello, there ${Date.now()}!'; }`
           return new Response(code, {
@@ -66,7 +90,8 @@
 
       const btn = document.querySelector("#button");
       const panel = document.querySelector("#panel");
-      
+      const info = document.querySelector("#info").innerText = baseUrl;
+
       btn.addEventListener("click", async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();

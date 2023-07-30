@@ -1,5 +1,9 @@
-import { BrowserHttpAdapter } from "../dist/index.js";
+import { SwHttpAdapter } from "../dist/index.js";
 
-export const httpAdapter = new BrowserHttpAdapter({
-  serviceWorkerUrl : new URL("./index-service-worker.js", import.meta.url) + ''
-})
+export default function (options) {
+  return new SwHttpAdapter({
+    serviceWorkerUrl: new URL("./index-service-worker.js", import.meta.url) +
+      "",
+    ...options,
+  });
+}
