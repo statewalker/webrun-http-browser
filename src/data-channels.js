@@ -1,4 +1,4 @@
-import { serializeError, deserializeError } from "./errors.js";
+import { deserializeError, serializeError } from "./errors.js";
 import { recieveData, sendData } from "./data-send-recieve.js";
 
 export async function* sendStream(communicationPort, input, params = {}) {
@@ -33,8 +33,10 @@ export function handleStreams(communicationPort, handler) {
     }
   };
   communicationPort.addEventListener("message", listener);
-  try { communicationPort.start && communicationPort.start(); } catch (e) {}
-  return () => communicationPort.removeEventListener("message", listener);;
+  try {
+    communicationPort.start && communicationPort.start();
+  } catch (e) {}
+  return () => communicationPort.removeEventListener("message", listener);
 }
 
 /**
@@ -64,7 +66,7 @@ export function newChannel(port) {
 
   const close = async () => {
     await notifyAll({ done: true });
-    [...iterators].forEach(it => it.return && it.return());
+    [...iterators].forEach((it) => it.return && it.return());
     await channel.close();
   };
 
@@ -85,7 +87,7 @@ export function newChannel(port) {
         } finally {
           iterators = iterators.filter((i) => i !== it);
         }
-      })()
+      })(),
     );
   }
   return {
@@ -102,7 +104,7 @@ export function newInvokationChannel(port, handler = () => {
   const MESSAGE_TYPE_REQUEST = "REQUEST";
   const MESSAGE_TYPE_RESPONSE = "RESPONSE";
   const EVENT_MESSAGE = "message";
-  
+
   const requests = {};
   let requestCounter = 0;
   const listener = async (event) => {
@@ -114,8 +116,13 @@ export function newInvokationChannel(port, handler = () => {
         let result = await handler(request, ...(event.ports || []));
         const [response, ...transfers] = Array.isArray(result)
           ? result
-          : result !== undefined ? [result] : [];
-        port.postMessage({ type: MESSAGE_TYPE_RESPONSE, callId, response }, transfers);
+          : result !== undefined
+          ? [result]
+          : [];
+        port.postMessage(
+          { type: MESSAGE_TYPE_RESPONSE, callId, response },
+          transfers,
+        );
       } catch (error) {
         port.postMessage({
           type: MESSAGE_TYPE_RESPONSE,
@@ -150,7 +157,10 @@ export function newInvokationChannel(port, handler = () => {
     return new Promise((resolve, reject) => {
       try {
         requests[callId] = { resolve, reject };
-        port.postMessage({ type: MESSAGE_TYPE_REQUEST, callId, request }, transfers);
+        port.postMessage(
+          { type: MESSAGE_TYPE_REQUEST, callId, request },
+          transfers,
+        );
       } catch (error) {
         reject(error);
         delete request[callId];
@@ -164,4 +174,3 @@ export function newInvokationChannel(port, handler = () => {
     invoke,
   };
 }
-

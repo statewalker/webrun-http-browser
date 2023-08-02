@@ -119,8 +119,8 @@ export function newHttpServerStub(handler) {
     };
     const responseContent = await fromReadableStream(await response.body);
     return {
-      options : responseOptions,
-      content : responseContent
+      options: responseOptions,
+      content: responseContent,
     };
   };
 }

@@ -1,4 +1,4 @@
-import { serializeError, deserializeError } from "./errors.js";
+import { deserializeError, serializeError } from "./errors.js";
 
 export async function callChannel(mainChannel, callType, params, ...transfers) {
   return new Promise((resolve, reject) => {
@@ -7,14 +7,17 @@ export async function callChannel(mainChannel, callType, params, ...transfers) {
       const { result, error } = ev.data;
       if (error) reject(deserializeError(error));
       else resolve(result);
-    }
-    mainChannel.postMessage({ type : callType, params }, [channel.port2, ...transfers]);
-  })
+    };
+    mainChannel.postMessage({ type: callType, params }, [
+      channel.port2,
+      ...transfers,
+    ]);
+  });
 }
 
 export function handleChannelCalls(mainChannel, callType, handler) {
   const messageListener = async (event) => {
-    if (!event.data || event.data.type !== callType) return ;
+    if (!event.data || event.data.type !== callType) return;
     const [port, ...transfers] = event.ports;
     let response = {};
     try {
@@ -26,6 +29,8 @@ export function handleChannelCalls(mainChannel, callType, handler) {
     port.postMessage(response);
   };
   mainChannel.addEventListener("message", messageListener);
-  try { mainChannel.start && mainChannel.start(); } catch (e) {}
+  try {
+    mainChannel.start && mainChannel.start();
+  } catch (e) {}
   return () => mainChannel.removeEventListener("message", messageListener);
 }

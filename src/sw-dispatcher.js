@@ -18,7 +18,7 @@ export class SwPortHandler {
   }
 
   get rootUrl() {
-    return new URL(this.scope, import.meta.url)
+    return new URL(this.scope, import.meta.url);
   }
 
   get serviceWorkerUrl() {
@@ -153,7 +153,7 @@ export class SwPortDispatcher {
   }
 
   get scope() {
-    return new URL("./", import.meta.url) + '';
+    return new URL("./", import.meta.url) + "";
   }
 
   async loadChannelInfo(key) {

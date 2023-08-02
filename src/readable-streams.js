@@ -6,8 +6,9 @@ export function toReadableStream(it) {
       try {
         while (true) {
           const slot = await it.next();
-          if (!slot || slot.done)
+          if (!slot || slot.done) {
             break;
+          }
           controller.enqueue(await slot.value);
         }
       } catch (error) {

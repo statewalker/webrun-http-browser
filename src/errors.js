@@ -6,7 +6,8 @@ export function serializeError(error) {
 }
 
 export function deserializeError(error) {
-  if (typeof error === "string")
+  if (typeof error === "string") {
     error = { message: error };
+  }
   return Object.assign(new Error(error.message), error);
 }
