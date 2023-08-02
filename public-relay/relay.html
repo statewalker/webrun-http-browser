@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+  <script type="module">
+    import { newServiceWorkerPort, initServiceWorker } from "./relay-lib.js";
+
+    const swUrl = new URL("./relay-sw.js", window.location) + "";
+
+    let externalPort;
+    window.onmessage = async (ev) => {
+      if (ev.data.type === "CONNECT") {
+        const newExternalPort = (ev.ports || [])[0];
+        if (externalPort) {
+          newExternalPort.close();
+          return;
+        }
+        externalPort = newExternalPort;
+        await initServiceWorker(swUrl);
+        const serviceWorkerPort = newServiceWorkerPort();
+        serviceWorkerPort.onmessage = (event) => {
+          externalPort.postMessage(event.data, event.ports);
+        };
+
+        externalPort.onmessage = (event) => {
+          serviceWorkerPort.postMessage(event.data, event.ports);
+        };
+      }
+    };
+
+    // function newServiceWorkerPort() {
+    //   // Bind the service worker to
+    //   const channel = new MessageChannel();
+    //   channel.port1.onmessage = (event) => {
+    //     navigator.serviceWorker.controller.postMessage(event.data, event.ports);
+    //   };
+    //   navigator.serviceWorker.addEventListener("message", (event) => {
+    //     channel.port1.postMessage(event.data, event.ports);
+    //   });
+    //   return channel.port2;
+    // }
+
+    // async function initServiceWorker(swUrl) {
+    //   const {
+    //     installing,
+    //     waiting,
+    //     active,
+    //   } = await navigator.serviceWorker.register(swUrl, {
+    //     type: "module",
+    //   });
+    //   (installing || waiting || active).addEventListener("statechange", (e) => {
+    //     console.log("state", e.target.state);
+    //   });
+
+    //   const serviceWorker = navigator.serviceWorker;
+    //   await new Promise((resolve) => {
+    //     // Resolve right away if this page is already controlled.
+    //     if (serviceWorker.controller) {
+    //       resolve();
+    //     } else {
+    //       const onChange = () => {
+    //         resolve();
+    //         serviceWorker.removeEventListener("controllerchange", onChange);
+    //         serviceWorker.oncontrollerchange = null;
+    //       };
+    //       serviceWorker.addEventListener("controllerchange", onChange);
+    //       serviceWorker.oncontrollerchange = onChange;
+    //     }
+    //   });
+    //   const worker = serviceWorker.controller;
+    //   const isActivated = () => worker.state === "activated";
+    //   return await new Promise(async (resolve) => {
+    //     if (isActivated()) resolve(worker);
+    //     else {
+    //       worker.onstatechange = () => {
+    //         if (!isActivated()) return;
+    //         worker.onstatechange = null;
+    //         resolve(worker);
+    //       };
+    //     }
+    //   });
+    // }
+  </script>
+</body>
+
+</html>
