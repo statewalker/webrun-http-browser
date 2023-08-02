@@ -28,15 +28,13 @@
   },
   "dependencies": {
     "@statewalker/utils": "^0.4.2",
-    "idb-keyval": "^6.2.0",
-    "register-service-worker": "^1.7.2"
+    "idb-keyval": "^6.2.0"
   },
   "devDependencies": {
     "@statewalker/rollup": "^0.1.6",
     "eslint": "^8",
     "expect.js": "^0.3",
     "mocha": "^10",
-    "msw": "^0.49.2",
     "rollup": "^3"
   },
   "repository": {
@@ -47,7 +45,7 @@
     "eslint": "eslint src",
     "rollup": "rollup -c",
     "watch": "rollup -c --watch",
-    "test": "mocha -R spec ./test/index.js && yarn eslint",
+    "test": "mocha -R spec ./test/index.js",
     "prepublishOnly": "rm -rf dist && yarn test && yarn rollup"
   },
   "sideEffects": false,
