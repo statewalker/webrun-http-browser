@@ -1,4 +1,4 @@
-import { fromReadableStream, toReadableStream } from "./readable-streams";
+import { fromReadableStream, toReadableStream } from "./readable-streams.js";
 
 /**
  * This method returns an HTTP handlers transforming
