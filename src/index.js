@@ -7,3 +7,6 @@ export * from "./http-stubs.js";
 export * from "./http-sw-dispatcher.js";
 export * from "./readable-streams.js";
 export * from "./sw-dispatcher.js";
+
+import { newRegistry } from "@statewalker/utils";
+export { newRegistry };
