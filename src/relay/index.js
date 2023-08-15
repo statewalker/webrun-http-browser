@@ -160,8 +160,8 @@ export function getRelayWindowMessageHandler({
 }
 
 export async function newRemoteRelayChannel({
-  baseUrl = new URL("./", import.meta.url),
-  url = new URL("./relay.html", baseUrl),
+  baseUrl = new URL("../public-relay/", import.meta.url),
+  url = new URL("relay.html", baseUrl),
   container = document.body,
 } = {}) {
   const messageChannel = new MessageChannel();
