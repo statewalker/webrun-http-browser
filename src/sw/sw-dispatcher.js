@@ -1,6 +1,6 @@
 import { newRegistry } from "@statewalker/utils";
-import { callChannel, handleChannelCalls } from "./data-calls.js";
 import { get, set } from "idb-keyval";
+import { callChannel, handleChannelCalls } from "../core/data-calls.js";
 
 export class SwPortHandler {
   constructor(options) {

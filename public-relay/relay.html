@@ -1,33 +1,12 @@
 <!DOCTYPE html>
 <html>
-
 <body>
   <script type="module">
-    import { newServiceWorkerPort, initServiceWorker } from "./relay-lib.js";
-
-    const swUrl = new URL("./relay-sw.js", import.meta.url) + "";
-
-    let externalPort;
-    window.onmessage = async (ev) => {
-      if (ev.data.type === "CONNECT") {
-        const newExternalPort = (ev.ports || [])[0];
-        if (externalPort) {
-          newExternalPort.close();
-          return;
-        }
-        externalPort = newExternalPort;
-        await initServiceWorker(swUrl);
-        const serviceWorkerPort = newServiceWorkerPort();
-        serviceWorkerPort.onmessage = (event) => {
-          externalPort.postMessage(event.data, event.ports);
-        };
-
-        externalPort.onmessage = (event) => {
-          serviceWorkerPort.postMessage(event.data, event.ports);
-        };
-      }
-    };
+    import { getRelayWindowMessageHandler } from "../dist/index.js";
+    window.onmessage = getRelayWindowMessageHandler({
+      swUrl : new URL("./relay-sw.js", import.meta.url) + "",
+      scopeUrl : new URL("./", import.meta.url) + "",
+    });
   </script>
 </body>
-
 </html>

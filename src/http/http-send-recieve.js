@@ -1,4 +1,4 @@
-import { handleStreams, sendStream } from "./data-channels.js";
+import { handleStreams, sendStream } from "../core/data-channels.js";
 import { newHttpClientStub, newHttpServerStub } from "./http-stubs.js";
 
 async function* httpToIterator(params) {

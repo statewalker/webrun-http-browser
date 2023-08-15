@@ -9,7 +9,7 @@ export function startHeartbit({
   }, timeout);
 }
 
-async function callPeriodically(action, timeout) {
+export async function callPeriodically(action, timeout) {
   let timerId, stopped = false;
   async function run() {
     try {

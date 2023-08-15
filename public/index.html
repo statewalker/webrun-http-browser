@@ -17,8 +17,9 @@
   <div id="panel"></div>
 
   <script type="module">
-    import newHttpAdapter from "./index.js";
     import { v4 as uuidv4 } from "https://unpkg.com/uuid@9.0.0/dist/esm-browser/index.js";
+    import * as relayLib from "../dist/index.js";
+    import { callPeriodically } from "../public-relay/heartbeat.js";
 
     document.addEventListener("DOMContentLoaded", main);
     // Promise.resolve().then(main).catch(console.error);
@@ -26,102 +27,69 @@
     async function main() {
 
       const key = uuidv4();
-      const prefix = `/${key}/`; // "/sw-http/"
-      const httpAdapter= newHttpAdapter({ key });
-      await httpAdapter.start();
+      const [register, cleanup] = relayLib.newRegistry();
 
-      function showMessage(message) {
-        const elm = document.body.querySelector("#messages");
-        elm.innerHTML = message;
-      }
-      showMessage("No messages yet... :(")
+      const options = {
+        url: new URL(`../public-relay/relay.html?${Math.random()}`, import.meta.url),
+        container: document.body,
+      };
+      const serviceKey = "abc";
 
-      window.addEventListener("message", receiveMessage, false);
-      function receiveMessage(event) {
-        // const [port] = event.ports || [];
-        if (event.ports) {
-          event.ports[0]?.postMessage("Message back from the IFrame");
-          console.log('EVENT WITH PORTS:', event, event.ports);
+      // ---------------------------
+      // Server-side part 
+      const serverPort = await relayLib.newRemoteRelayChannel(options);
+      register(serverPort.close);
+
+      const serviceHandler = async (request) => {
+        const info = relayLib.splitServiceUrl(request.url);
+        const result = {
+          message: "Hello Wonderful World!",
+          requestUrl: String(request.url),
+          ...info
         }
-        showMessage(`Message from "${event.origin}". Data:"${JSON.stringify(event.data)}" !`)
-      }
-
-      const registration = await httpAdapter.register(prefix, async (request) => {
-        const requestUrl = new URL(request.url);
-        const elm = document.querySelector("#counter");
-        elm.innerHTML = `URL: ${requestUrl}<br />Last Request Time: ${Date.now()}`;
-
-        const { pathname } = requestUrl;
-        if (request.method === 'GET' && pathname.match(/\.js$/)) {
-          const code = `export default function sayHello() { return 'Hello, there ${Date.now()}!'; }`
-          return new Response(code, {
-            headers: {
-              "Content-Type": "text/javascript",
-              "X-Foo-Bar": "baz"
-            }
-          })
-        } else if (request.method === 'POST') {
-          const body = await request.text();
-          console.log('[client] Body:', body);
-          const obj = {
-            url: request.url + '',
-            method: request.method,
-            message: body.toUpperCase(),
-            headers: Object.fromEntries([...request.headers])
-          }
-          return new Response(JSON.stringify(obj, null, 2), {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Foo-Bar": "baz"
-            }
-          })
-        }
-
-        return new Response("Hello, world " + Date.now(), {
+        return new Response(JSON.stringify(result, null, 2), {
           headers: {
-            "Content-Type": "text/plain",
-            "X-Foo-Bar": "baz"
+            "Content-Type": "application/json"
           }
         })
+      };
+      register(await relayLib.initHttpService(serviceHandler, {
+        key: serviceKey,
+        port: serverPort.port
+      }))
 
-      })
+      // ---------------------------
+      // Call the defined endpoint. 
 
-      const { baseUrl } = registration;
+      // We can not use the "fech" method - to be able
+      // to use it this page should be served from the same root URL
+      // as the service worker managing pages. 
+      // To deal with this constraint we use the connection
+      // port allowing to perform direct calls using
+      // the explicit service key on the client.
+      const clientPort = await relayLib.newRemoteRelayChannel(options);
+      register(clientPort.close);
 
-      const btn = document.querySelector("#button");
-      const panel = document.querySelector("#panel");
-      const info = document.querySelector("#info").innerText = baseUrl;
+      const request = new Request(`http://www.foo.bar/titi/toto`);
+      const response = await relayLib.callHttpService(request, {
+        key: serviceKey,
+        port: clientPort.port
+      });
+      const json = await response.json();
+      console.log('* Response:', json);
 
-      btn.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const fetchUrl = new URL("./data-calls.js", baseUrl) + '';
-        console.log('Fetch URL:', fetchUrl);
-        const res = await fetch(fetchUrl, {
-          // method: 'POST',
-          // body: "Hello, there!",
-          // headers: {
-          //   "Content-Type": "text/plain"
-          // }
-        });
-        const content = await res.text();
-        panel.innerText = content;
-      })
-      await new Promise(r => setTimeout(r, 2000));
 
-      // (async function () {
-      //   try {
-      //     const scriptUrl = new URL("./xyz/sayHello.js", baseUrl) + '';
-      //     console.log('>TF', scriptUrl);
-      //     await new Promise(r => setTimeout(r, 2000));
-      //     const { default: sayHello } = await import(scriptUrl);
-      //     console.log(sayHello);
-      //     console.log(sayHello())
-      //   } catch (error) {
-      //     console.error(error);
-      //   }
-      // })();
-
+      // ---------------------------
+      // Start hearbeting calls - to avoid removal of the underlying ServiceWorker
+      // const url = new URL(`../public-relay/~.ping`, import.meta.url);
+      register(callPeriodically(async () => {
+        const response = await relayLib.callHttpService(new Request("~sys/ping/"), {
+          key: serviceKey,
+          port: clientPort.port
+        })
+        const result = await response.json();
+        console.log(result);
+      }, 10000))
 
     }
 

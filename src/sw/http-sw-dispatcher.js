@@ -1,4 +1,4 @@
-import { handleHttpRequests, sendHttpRequest } from "./http-send-recieve.js";
+import { handleHttpRequests, sendHttpRequest } from "../http/http-send-recieve.js";
 import { SwPortDispatcher, SwPortHandler } from "./sw-dispatcher.js";
 
 export class SwHttpAdapter extends SwPortHandler {

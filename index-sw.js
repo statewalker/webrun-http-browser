@@ -1,6 +1,4 @@
-import { startHttpDispatcher } from "./src/http-sw-dispatcher.js";
+import { startRelayServiceWorker } from "./src/relay/index-sw.js";
 
-export const result = startHttpDispatcher({
-  self,
-  log: console.log.bind(console, "[sw]"),
-});
+const cleanup = startRelayServiceWorker(self);
+// 

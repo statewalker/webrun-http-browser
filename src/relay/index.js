@@ -1,10 +1,10 @@
+import { newRegistry } from "@statewalker/utils";
+import { callChannel, handleChannelCalls } from "../core/data-calls.js";
 import {
-  callChannel,
-  handleChannelCalls,
   handleHttpRequests,
-  newRegistry,
   sendHttpRequest,
-} from "../dist/index.js";
+} from "../http/http-send-recieve.js";
+export * from "./splitServiceUrl.js";
 
 export function newServiceWorkerPort() {
   // Bind the service worker to
@@ -18,13 +18,14 @@ export function newServiceWorkerPort() {
   return channel.port2;
 }
 
-export async function initServiceWorker(swUrl) {
+export async function initServiceWorker1({ swUrl, scopeUrl, type }) {
   const {
     installing,
     waiting,
     active,
   } = await navigator.serviceWorker.register(swUrl, {
-    type: "module",
+    // type: "module",
+    scope: scopeUrl,
   });
   (installing || waiting || active).addEventListener("statechange", (e) => {
     console.log("state", e.target.state);
@@ -59,6 +60,50 @@ export async function initServiceWorker(swUrl) {
   });
 }
 
+export async function initServiceWorker({ swUrl, scopeUrl, type }) {
+  await navigator.serviceWorker.register(swUrl, {
+    type,
+    scope: scopeUrl,
+  });
+  const worker = await getServiceWorkerController();
+  await awaitServiceWorkerActivation(worker);
+  return worker;
+
+  async function getServiceWorkerController() {
+    return await new Promise((resolve) => {
+      // Resolve right away if this page is already controlled.
+      const serviceWorker = navigator.serviceWorker;
+      if (serviceWorker.controller) {
+        resolve(serviceWorker.controller);
+      } else {
+        const onChange = () => {
+          resolve(serviceWorker.controller);
+          serviceWorker.removeEventListener("controllerchange", onChange);
+          serviceWorker.oncontrollerchange = null;
+        };
+        serviceWorker.addEventListener("controllerchange", onChange);
+        serviceWorker.oncontrollerchange = onChange;
+      }
+    });
+  }
+
+  // ------------------------------
+  // Await until the service is ready
+  async function awaitServiceWorkerActivation(worker) {
+    const isActivated = () => worker.state === "activated";
+    await new Promise(async (resolve) => {
+      if (isActivated()) resolve();
+      else {
+        worker.onstatechange = () => {
+          if (!isActivated()) return;
+          worker.onstatechange = null;
+          resolve();
+        };
+      }
+    });
+  }
+}
+
 export async function initHttpService(handler, {
   key,
   port,
@@ -83,6 +128,35 @@ export async function callHttpService(request, {
   });
   const result = await sendHttpRequest(callPort, request);
   return result;
+}
+
+export function getRelayWindowMessageHandler({
+  swUrl = new URL("./index-sw.js", import.meta.url) + "",
+  scopeUrl = new URL("../", import.meta.url) + "",
+} = {}) {
+  let externalPort;
+  return async (ev) => {
+    if (ev.data.type === "CONNECT") {
+      const newExternalPort = (ev.ports || [])[0];
+      if (externalPort) {
+        newExternalPort.close();
+        return;
+      }
+      externalPort = newExternalPort;
+      await initServiceWorker({
+        swUrl,
+        scopeUrl,
+      });
+      const serviceWorkerPort = newServiceWorkerPort();
+      serviceWorkerPort.onmessage = (event) => {
+        externalPort.postMessage(event.data, event.ports);
+      };
+
+      externalPort.onmessage = (event) => {
+        serviceWorkerPort.postMessage(event.data, event.ports);
+      };
+    }
+  };
 }
 
 export async function newRemoteRelayChannel({

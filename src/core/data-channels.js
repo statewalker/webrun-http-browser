@@ -51,7 +51,7 @@ export function handleStreams(communicationPort, handler) {
  *  * `sendAll(it : AsyncIterator) : Promise<any>` - sends all values defined by the given
  *     AsyncIterator to the peer
  */
-export function newChannel(port) {
+function newChannel(port) {
   let listeners = [];
   let iterators = [];
 
@@ -60,7 +60,10 @@ export function newChannel(port) {
       await listener(data);
     }
   };
-  const channel = newInvokationChannel(port, notifyAll);
+  const channel = newInvokationChannel({
+    port,
+    handler: notifyAll,
+  });
 
   const start = () => channel.start();
 
@@ -98,15 +101,20 @@ export function newChannel(port) {
   };
 }
 
-export function newInvokationChannel(port, handler = () => {
-  throw new Error("Handler not implemented");
+export function newInvokationChannel({
+  port,
+  handler = () => {
+    throw new Error("Handler not implemented");
+  },
+  onError = console.error,
+  newCallId = () =>
+    newInvokationChannel.__counter = (newInvokationChannel.__counter || 0) + 1,
 }) {
   const MESSAGE_TYPE_REQUEST = "REQUEST";
   const MESSAGE_TYPE_RESPONSE = "RESPONSE";
   const EVENT_MESSAGE = "message";
 
   const requests = {};
-  let requestCounter = 0;
   const listener = async (event) => {
     const data = event.data || {};
     const { type, callId } = data;
@@ -143,17 +151,25 @@ export function newInvokationChannel(port, handler = () => {
   };
 
   const start = async () => {
-    port.addEventListener(EVENT_MESSAGE, listener);
-    await port.start();
+    try {
+      port.addEventListener(EVENT_MESSAGE, listener);
+      port.start && await port.start();
+    } catch (e) {
+      onError(e);
+    }
   };
 
   const close = async () => {
-    port.removeEventListener(EVENT_MESSAGE, listener);
-    await port.close();
+    try {
+      port.removeEventListener(EVENT_MESSAGE, listener);
+      port.close && await port.close();
+    } catch (e) {
+      onError(e);
+    }
   };
 
   const invoke = async function (request = {}, ...transfers) {
-    const callId = ++requestCounter;
+    const callId = newCallId();
     return new Promise((resolve, reject) => {
       try {
         requests[callId] = { resolve, reject };
