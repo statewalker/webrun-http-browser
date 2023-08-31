@@ -1,6 +1,6 @@
 {
   "name": "@statewalker/webrun-http-browser",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Service-worker-based HTTP server simulation for browsers",
   "keywords": [],
   "homepage": "https://github.com/statewalker/statewalker-webrun-http-browser",
