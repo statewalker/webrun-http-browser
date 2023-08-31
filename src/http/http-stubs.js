@@ -33,14 +33,18 @@ export function newHttpClientStub(send) {
       "referrer",
       "referrerPolicy",
       "integrity",
-      "keepalive",
+      "keepalive"
     ];
-    // request = await request.clone();
+    const headers = [...request.headers].map(([key, value]) => {
+      return [key, value]
+    });
     const requestOptions = fields.reduce((options, key) => {
       const val = request[key];
       if (val !== undefined) options[key] = val;
       return options;
-    }, {});
+    }, {
+      headers
+    });
     const requestContent = (request.body)
       ? fromReadableStream(request.body)
       : [];
@@ -93,7 +97,11 @@ export function newHttpServerStub(handler) {
       content: requestContent,
     } = await params;
     let requestBody = undefined;
-    const { url, mode } = requestOptions;
+    const { url, mode, headers = [] } = requestOptions;
+    const requestHeaders = new Headers()
+    for (let  [key, value] of headers) {
+      requestHeaders.append(key, value);
+    }
     delete requestOptions.mode;
     delete requestOptions.url;
     if (
@@ -108,6 +116,7 @@ export function newHttpServerStub(handler) {
     }
     const request = new Request(url, {
       ...requestOptions,
+      headers: requestHeaders,
       // duplex: 'full',
       body: requestBody,
     });

@@ -189,9 +189,10 @@ export async function newRemoteRelayChannel({
     );
   });
   return {
+    baseUrl,
     port: messageChannel.port2,
     close: () => {
-      container.parentElement && container.parentElement.removeChild(container);
+      iframe.parentElement && iframe.parentElement.removeChild(iframe);
       messageChannel.port1.close();
       messageChannel.port2.close();
     },

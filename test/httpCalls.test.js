@@ -25,6 +25,13 @@ describe("Abc", () => {
         request,
       );
       messageChannel.port1.addEventListener("message", console.error);
+      expect([...result.headers]).to.eql([
+        ["content-type", "text/json"],
+        ["cross-origin-embedder-policy", "require-corp"],
+        ["cross-origin-opener-policy", "same-origin"],
+        ["x-field-from-request", "abc"],
+        ["x-foo-bar", "baz"],
+      ]);
       const json = await result.json();
       try {
         expect(json).to.eql({
@@ -69,6 +76,10 @@ function newHttpRequest() {
   return new Request("https://foo.bar.baz/~abc/new/resource", {
     method: "POST",
     duplex: "half",
+    headers: {
+      "Content-Type": "text/plain",
+      "x-field-from-request": "abc",
+    },
     body: requestBody,
   });
 }
@@ -106,12 +117,15 @@ async function handleHttpRequest(request) {
     message: "Hello!",
     content,
   };
+  const headers = new Headers();
+  for (const [key, value] of request.headers) {
+    headers.set(key, value);
+  }
+  headers.set("Content-Type", "text/json");
+  headers.set("X-Foo-Bar", "baz");
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "require-corp");
   return new Response(JSON.stringify(code, null, 2), {
-    headers: {
-      "Content-Type": "text/plain",
-      "X-Foo-Bar": "baz",
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
-    },
+    headers,
   });
 }
