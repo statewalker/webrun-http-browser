@@ -1,0 +1,318 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* CSS styles for files tree. */
+    .tree {
+      --tree-line-width: 1px;
+      --tree-line-color: silver;
+      --tree-connector-radius: 0.1em;
+      --tree-connector-length: 0.5em;
+      --tree-connector-height: 0.6em;
+      --tree-content-padding: 0.5em;
+      position: relative;
+    }
+    .tree .tree-node {
+      position: relative;
+      padding-inline-start: var(--tree-connector-length);
+      border-inline-start: var(--tree-line-width) solid var(--tree-line-color);
+    }
+    .tree .tree-node:before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: var(--tree-connector-length);
+      height: var(--tree-connector-height);
+      max-height: 100%;
+      margin-inline-start: calc(0em - var(--tree-line-width));
+      border-bottom: var(--tree-line-width) solid var(--tree-line-color);
+      border-inline-start: var(--tree-line-width) solid var(--tree-line-color);
+      border-end-start-radius: var(--tree-connector-radius);
+    }
+    .tree .tree-node:last-child {
+      border-inline-start: var(--tree-line-width) solid transparent;  
+    }
+    .tree .tree-node > .tree-node-content {
+      position: relative;
+      padding-inline-start: var(--tree-content-padding);
+    }
+    .tree .tree-node > .tree-node-content:before {
+      content: "";
+      position: absolute;
+      top: var(--tree-connector-height);
+      left: 0;
+      right: 0;
+      width: var(--tree-line-width);
+      height: calc(100% - var(--tree-connector-height));
+      border-inline-start: var(--tree-line-width) solid var(--tree-line-color);
+    }
+    .tree  .tree-node > .tree-node-content:last-child:before  {
+      border-inline-start: var(--tree-line-width) solid transparent;
+    }
+
+    .tree {
+     --tree-content-padding: 0.1em;
+     padding: 1em 1em 1em 2em;
+    }
+    .tree .tree-node > .tree-node-content {
+      display: flex;
+      gap: 0.2em;
+    }
+    .tree .tree-node > .tree-node-content > .icon-dir,
+    .tree .tree-node > .tree-node-content > .icon-file {
+       display: block;
+       width: 1.5em; 
+       color: gray;
+    }
+
+    /* */ 
+    .files-panel {
+      display: flex;
+      align-items: stretch;
+      align-content: stretch;
+      justify-content: stretch;
+      min-height: 25em;
+      gap: 1em;
+      width: 100%;
+    }
+    .files-panel .files-explorer {
+      min-width: 15em;
+      border: 1px solid #eee;
+      flex: none;
+    }
+    .files-panel .files-preview {
+      flex: auto;
+      border: 1px solid red;
+    }
+    .files-panel .files-preview iframe {
+      width: 100%;
+      height: calc(100% - 1em);
+      border: none;
+      outline: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>Local File System</h3>
+  <p>
+    This page allows you to get read/write access to your local file system and develop the whole site directly in the browser without an HTTP server.  
+  </p>
+  <div>
+    <button id="fs-open">Open Workspace</button>
+    <button id="fs-redraw-tree" style="display: none;">Redraw Files Tree</button>
+  </div>
+  <div class="files-panel">
+    <div class="files-explorer">
+      Files Tree:
+      <div id="fs-view"></div>
+    </div>
+    <div class="files-preview">
+      Files Preview:
+      <iframe id="fs-preview" name="fs-preview" width="100%" height="100%" src=""></iframe>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as WebRunHttp from "https://unpkg.com/@statewalker/webrun-http-browser@0.3/dist/index.js";
+    import { Hono } from "https://unpkg.com/hono@3.5/dist/index.js";
+    import mime from "https://esm.sh/mime-types";
+    import {
+      BrowserFilesApi,
+      verifyPermission,
+    } from "https://unpkg.com/@statewalker/webrun-files@0.2.0/dist/index.js";
+
+    Promise.resolve().then(main).catch(console.error);
+    async function main() {
+
+      const openBtn = document.querySelector("#fs-open");
+      const refreshBtn = document.querySelector("#fs-redraw-tree");
+      let close;
+      openBtn.addEventListener("click", async () => {
+        if (close) close(); 
+        // Open a local folder:
+        const fs = await openRepository();
+        // Create a dispatcher between files.
+        // This dispatcher get the requested path, read the 
+        // file content and return it to the caller with
+        // a correct mime type:
+        const router = await newFilesRouter(fs);
+
+        // Create an HTTP Server with the specified name.
+        // It uses the given Hono router to dispatch requests
+        // between endpoints.
+        const SERVICE_KEY = "FS"
+        const serviceBaseUrl = await startHttpService({
+          serviceKey : SERVICE_KEY,
+          router
+        })
+
+        openBtn.style.display = "none";
+        refreshBtn.style.display = "block";
+        const target = "fs-preview";
+        const filesRenderOptions = {
+          fs,
+          baseUrl : serviceBaseUrl,
+          target
+        };
+        renderFilesExplorer(filesRenderOptions);
+        refreshBtn.addEventListener("click", (event) => {
+          renderFilesExplorer(filesRenderOptions);
+        });
+      })
+    }
+
+    function newFilesRouter(fs) {
+      const router = new Hono();
+      router.get("/*", async (context) => {
+        let { url, path } = context.req;
+        path = path.replace(/#.*$/, "");
+        if (path.match(/\/$/)) {
+          path = path + "index.html";
+        }
+        const fileInfo = await fs.stats(path);
+        if (!fileInfo || (fileInfo.kind !== "file")) {
+          return context.notFound();
+        }
+        const content = await fs.read(fileInfo);
+        const responseBody = await WebRunHttp.toReadableStream(content);
+        return new Response(responseBody, {
+          status: 200,
+          headers: {
+            "Content-Type": fileInfo.type,
+          },
+        });
+      });
+      return router;
+    }
+
+    async function openRepository(readwrite = true) {
+      const handler = await window.showDirectoryPicker();
+      if (!(await verifyPermission(handler, readwrite))) {
+        throw new Error("Access was not granted");
+      }
+      const fs = new BrowserFilesApi({ rootHandler : handler });
+      return fs;
+    }
+
+    async function startHttpService({
+      serviceKey,
+      router
+    }) {
+      // Step 1: Start a ServiceWorker and open a MessageChannel used to recieve HTTP requests and send responses:
+      const connection = await WebRunHttp.newRemoteRelayChannel();
+
+      // Step 2: Define an HTTP handler
+      const serviceBaseUrl = `${connection.baseUrl}~${serviceKey}`;
+      const app = new Hono({
+        getPath: (req) => req.url.substring(serviceBaseUrl.length)
+      });
+      // Add the router
+      app.route("/", router);
+      const httpHandler = (request) => app.fetch(request);
+
+      // Step 3: Instantiate a "server" using the communcation channel with the ServiceWorker:
+      const close = await WebRunHttp.initHttpService(httpHandler, {
+        key: serviceKey,  // Service prefix
+        port: connection.port
+      });
+
+      return serviceBaseUrl;
+    }
+
+    // Files tree visualization
+
+    async function renderFilesExplorer({ fs, baseUrl, target = "_blank" }) {
+      const container = document.querySelector("#fs-view");
+      container.innerHTML = "";
+      container.classList.add("tree");
+      for await (let file of fs.list("/", { recursive: false })) {
+        renderFile({
+          fs,
+          file,
+          baseUrl,
+          container,
+          target
+        })
+      }
+    }
+
+    function renderFile({
+      fs,
+      file,
+      container,
+      baseUrl,
+      target
+    }) {
+      let path = file.path;
+      const isDirectory = file.kind === "directory";
+      if (isDirectory) {
+        if (path[path.length - 1] !== '/') {
+          path += '/';
+        }
+      }
+
+      const treeNodeElm = newElement("tree-node", container);
+      const treeNodeContentElm = newElement("tree-node-content", treeNodeElm);
+      const iconElm = newElement("tree-node-icon", treeNodeContentElm);
+      const iconCls = isDirectory ? "icon-dir" : "icon-file";
+      iconElm.classList.add(iconCls);
+      iconElm.innerText = isDirectory ? 'dir' : 'file';
+
+      const linkElm = newElement("file-name", treeNodeContentElm, "a");
+      const fileUrl = baseUrl + path;
+      linkElm.setAttribute("href", fileUrl);
+      linkElm.setAttribute("target", target);
+      linkElm.innerText = file.name;
+
+      if (isDirectory) {
+        let opened = false;
+        linkElm.addEventListener("click", async (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          opened = !opened;
+          if (opened) {
+            for await (let child of fs.list(file, { recursive: false })) {
+              renderFile({
+                fs,
+                file : child,
+                baseUrl,
+                container : treeNodeElm,
+                target
+              })
+            }
+          } else {
+            let elm = treeNodeElm.querySelector(".tree-node-content");
+            elm = elm?.nextElementSibling;
+            while (elm) {
+              const next = elm.nextElementSibling;
+              treeNodeElm.removeChild(elm);
+              elm = next;
+            }
+          }
+        })
+      }
+
+      function newElement(className, parent, name = "div") {
+        const div = document.createElement(name);
+        className
+          .split(/\\s+/)
+          .map(s => s.trim())
+          .forEach(cls => div.classList.add(cls));
+        if (parent) {
+          parent.appendChild(div);
+        }
+        return div;
+      }
+    }
+
+  </script>
+</body>
+
+</html>
