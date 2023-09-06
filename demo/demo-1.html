@@ -1,0 +1,199 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+
+<body>
+  <h1>Dynamic Site</h1>
+  <p>This demo shows how to launch a dynamic site containing the following parts:</p>
+  <ul>
+    <li><code>/index.html</code> - the main page referencing a CSS and a java script files. Note that the javascript is
+      imported using the standard ESM <code>import</code> notation</li>
+    <li><code>/index.css</code> - styles for the HTML page.</li>
+    <li><code>/index.js</code> - the main application code. This script listens the input box and sent its content to
+      the server-side API.</li>
+    <li><code>/api/:name</code> - dynamic server-side endpoint running responding to GET HTTP requests from the client.
+      This endpoint returns JSON object with a greeting message using the transmitted name with the current time.
+      The name of the user is loaded from the URL.
+
+      <p>Example of the server response:</p>
+      <pre>
+        {
+          "name" : "John",
+          "time" : "11:02:59",
+          "milliseconds" : "785"
+        }
+      </pre>
+    </li>
+  </ul>
+  <div id="view"></div>
+
+  <script type="module">
+    import * as WebRunHttp from "../dist/index.js";
+    import { Hono } from "https://unpkg.com/hono@3.5/dist/index.js";
+    import mime from "https://esm.sh/mime-types";
+
+    Promise.resolve().then(main).catch(console.error);
+    async function main() {
+      // Load a Hono request router:
+      const router = getRouter();
+
+      // Create an HTTP Server with the specified name.
+      // It uses the given Hono router to dispatch requests
+      // between endpoints.
+      const serviceBaseUrl = await startHttpService({
+        serviceKey: "MY_SITE",
+        router
+      })
+      const siteUrl = `${serviceBaseUrl}/`;
+
+      // Now we can visualize the site in an iframe iframe:
+      const container = document.querySelector("#view");
+      const iframe = document.createElement("iframe");
+      iframe.width = "100%";
+      iframe.height = "500px";
+      iframe.src = siteUrl;
+      container.appendChild(iframe);
+
+      // We also append a reference to this site.
+      // It allows to open the site in a separate window:
+      const a = document.createElement("a");
+      a.target = "_blank";
+      a.href = siteUrl;
+      a.innerText = `Open "~MY_SITE/index.html" in a new window.`;
+      container.insertBefore(a, iframe);
+    }
+
+    async function startHttpService({
+      serviceKey,
+      router
+    }) {
+      // Step 1: Start a ServiceWorker and open a MessageChannel used to recieve HTTP requests and send responses:
+      const connection = await WebRunHttp.newRemoteRelayChannel();
+
+      // Step 2: Define an HTTP handler
+      const serviceBaseUrl = `${connection.baseUrl}~${serviceKey}`;
+      const app = new Hono({
+        getPath: (req) => req.url.substring(serviceBaseUrl.length)
+      });
+      // Add the router
+      app.route("/", router);
+      const httpHandler = (request) => app.fetch(request);
+
+      // Step 3: Instantiate a "server" using the communcation channel with the ServiceWorker:
+      const close = await WebRunHttp.initHttpService(httpHandler, {
+        key: serviceKey,  // Service prefix
+        port: connection.port
+      });
+
+      return serviceBaseUrl;
+    }
+
+    function getRouter() {
+      const router = new Hono();
+
+      // Server-side REST API handler:
+      router.get("/api/:name", (c) => {
+        const { name } = c.req.param()
+        const date = new Date();
+        const response = {
+          message: `Hello ${name}!`,
+          time: date.toLocaleTimeString(),
+          milliseconds: date.getMilliseconds()
+        }
+        return c.json(response);
+      });
+
+      // Static files: an object with path names and the corresponding content
+      const files = getStaticFiles();
+      // Register these files with a basic dispatcher
+      // returning the file content to the caller:
+      router.get("/*", newStaticFilesDispatcher(files))
+
+      return router;
+    }
+
+    function newStaticFilesDispatcher(files) {
+      return function showStaticFiles(context) {
+        let { url, path } = context.req;
+        path = path.replace(/#.*$/, "");
+        if (path.match(/\/$/)) {
+          path = path + "index.html";
+        }
+        const result = files[path];
+        if (!result) {
+          return context.notFound();
+        }
+        const mimeType = mime.lookup(path) || "application/octet-stream";
+        context.header("Content-Type", mimeType);
+        context.status(201);
+        if (typeof result === "object") {
+          return context.json(result);
+        } else {
+          return context.body(result);
+        }
+      };
+    }
+
+    function getStaticFiles() {
+      return {
+        "/index.css": `
+          html, body {
+            padding: 0;
+            margin: 0;
+          }
+          h1 {
+            color : navy;
+          }
+        `,
+
+
+        "/index.js": `
+        document.addEventListener("DOMContentLoaded", () => {
+          const input = document.querySelector("#name");
+          input.addEventListener("input", (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            updateName();
+          })
+          updateName();
+          async function updateName() {
+            const name = input.value;
+            const res = await fetch("./api/" + encodeURIComponent(name));
+            const { message, time, milliseconds } = await res.json();
+            const view = document.querySelector("#messages");
+            view.innerHTML = "<div>" + message + "</div><div>Current time is " + time + " (and " + milliseconds + " milliseconds).</div>";
+          }          
+        })
+        `,
+        "/index.html": `<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./index.css" />
+</head>
+<body>
+  <h1>In-Browser Dynamic Site</h1>
+  <div>
+    Please enter your name:
+    <input type="text" id="name" value="John">
+  </div>
+  <p>Message from the server:</p>
+  <div id="messages">
+  </div>
+  <script type="module" src="./index.js"><\/script>
+</body>
+</html>
+`
+      }
+    }
+  </script>
+</body>
+
+</html>
