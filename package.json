@@ -16,6 +16,7 @@
     "public",
     "public-relay",
     "src/**/*.js",
+    "demo",
     "index.js"
   ],
   "module": "src/index.js",
