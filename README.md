@@ -7,8 +7,8 @@ After that the same code can be deployed in Deno / Deno Deploy / Cloudflare / No
 ## Demo
 
 * [https://observablehq.com/@kotelnikov/webrun-http-service](https://observablehq.com/@kotelnikov/webrun-http-service) - an Observable page demonstrating how it works. You can play with the code here.
-* [Demo 1](./demo/demo-1.html) - a dynamic web site with a server-side API, a HTML page and a CSS file
-* [Demo 2](./demo/demo-2.html) - a virtual file server exposing your local disk content
+* [Demo 1](https://unpkg.com/@statewalker/webrun-http-browser@0.3/demo/demo-1.html) - a dynamic web site with a server-side API, a HTML page and a CSS file
+* [Demo 2](https://unpkg.com/@statewalker/webrun-http-browser@0.3/demo/demo-2.html) - a virtual file server exposing your local disk content
 
 ## Features 
 
